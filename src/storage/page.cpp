@@ -3,11 +3,7 @@
 
 namespace sothdb {
 
-// Header layout (16 bytes total):
-//   [0..3]   page_id     (4 bytes)
-//   [4..11]  lsn         (8 bytes)
-//   [12..13] num_slots   (2 bytes)
-//   [14..15] free_space_offset  (2 bytes, points to start of free region from the back)
+// page header: page_id(4) | lsn(8) | num_slots(2) | free_space_offset(2) = 16 bytes
 
 Page::Page() {
     Reset();

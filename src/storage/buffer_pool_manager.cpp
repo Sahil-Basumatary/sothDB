@@ -109,6 +109,7 @@ bool BufferPoolManager::FlushPage(page_id_t page_id) {
 }
 
 void BufferPoolManager::FlushAllPages() {
+    // TODO: should probably hold latch_ here
     for (auto& [pid, fid] : page_table_) {
         auto& page = pages_[fid];
         if (page.IsDirty()) {

@@ -44,4 +44,4 @@ size_t LRUReplacer::Size() const {
     return lru_list_.size();
 }
 
-}  // namespace sothdb
+} // sothdb

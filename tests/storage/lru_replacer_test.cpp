@@ -40,4 +40,4 @@ TEST(LRUReplacerTest, EvictionOrder) {
     EXPECT_EQ(v, 1);
 }
 
-}  // namespace sothdb
+}

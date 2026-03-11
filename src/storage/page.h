@@ -49,4 +49,4 @@ class Page {
     int pin_count_{0};
 };
 
-}  // namespace sothdb
+} // namespace sothdb
