@@ -1,7 +1,6 @@
 #include "storage/disk_manager.h"
 #include <cstring>
 #include <stdexcept>
-#include <filesystem>
 
 namespace sothdb {
 
@@ -41,7 +40,6 @@ void DiskManager::WritePage(page_id_t page_id, const char* data) {
 void DiskManager::ReadPage(page_id_t page_id, char* data) {
     std::scoped_lock lock(io_mutex_);
     auto offset = static_cast<std::streamoff>(page_id) * PAGE_SIZE;
-    // TODO: calling filesystem::file_size while holding the lock is wasteful
     auto file_sz = GetFileSize();
     if (static_cast<size_t>(offset) >= file_sz) {
         std::memset(data, 0, PAGE_SIZE);
@@ -63,8 +61,8 @@ page_id_t DiskManager::AllocatePage() {
 }
 
 size_t DiskManager::GetFileSize() {
-    // FIXME: this won't work on a newly created empty file on some platforms
-    return std::filesystem::file_size(file_name_);
+    db_file_.seekg(0, std::ios::end);
+    return static_cast<size_t>(db_file_.tellg());
 }
 
 }  // namespace sothdb

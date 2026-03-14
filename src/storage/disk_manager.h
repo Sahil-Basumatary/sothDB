@@ -16,10 +16,10 @@ class DiskManager {
     void WritePage(page_id_t page_id, const char* data);
     void ReadPage(page_id_t page_id, char* data);
     page_id_t AllocatePage();
-    size_t GetFileSize();
     std::string GetFileName() const { return file_name_; }
 
  private:
+    size_t GetFileSize();
     std::string file_name_;
     std::fstream db_file_;
     std::atomic<page_id_t> next_page_id_{0};
