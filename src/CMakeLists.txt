@@ -1,5 +1,6 @@
 file(GLOB_RECURSE SOTHDB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/storage/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/recovery/*.cpp"
 )
 
 add_library(sothdb_engine STATIC ${SOTHDB_SOURCES})
