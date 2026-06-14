@@ -1,6 +1,7 @@
 file(GLOB_RECURSE TEST_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/storage/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/recovery/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/index/*.cpp"
 )
 
 add_executable(sothdb_tests ${TEST_SOURCES})
