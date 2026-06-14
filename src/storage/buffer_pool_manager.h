@@ -11,9 +11,12 @@
 
 namespace sothdb {
 
+class LogManager;
+
 class BufferPoolManager {
  public:
-    BufferPoolManager(size_t pool_size, DiskManager* disk_manager);
+    BufferPoolManager(size_t pool_size, DiskManager* disk_manager,
+                      LogManager* log_manager = nullptr);
     ~BufferPoolManager();
     Page* FetchPage(page_id_t page_id);
     Page* NewPage(page_id_t* page_id);
@@ -29,9 +32,16 @@ class BufferPoolManager {
     // latch_. Returns false only when every frame is pinned.
     bool AllocateFrame(frame_id_t* frame_id);
 
+    // Single choke point for evicting a dirty page to disk. Enforces the WAL
+    // protocol: the log must be durable up to the page's LSN before the page
+    // itself is written, otherwise a crash could surface a change on disk that
+    // no log record can replay or undo.
+    void WriteFrameToDisk(Page& page);
+
     size_t pool_size_;
     Page* pages_;
     DiskManager* disk_manager_;
+    LogManager* log_manager_;
     std::unordered_map<page_id_t, frame_id_t> page_table_;
     LRUReplacer replacer_;
     std::list<frame_id_t> free_list_;

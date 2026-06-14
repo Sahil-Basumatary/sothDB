@@ -3,6 +3,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include "recovery/log_manager.h"
 
 namespace sothdb {
 
@@ -71,6 +72,24 @@ TEST_F(BufferPoolTest, DirtyPageFlushedOnEviction) {
     ASSERT_NE(ptr, nullptr);
     EXPECT_EQ(std::string(ptr, len), "dirty data");
     bpm_->UnpinPage(pid, false);
+}
+
+TEST_F(BufferPoolTest, WalFlushedBeforeDirtyPageWrite) {
+    std::string wal_file = "test_buffer_pool.wal";
+    std::filesystem::remove(wal_file);
+    LogManager log_mgr(wal_file);
+    bpm_ = new BufferPoolManager(2, disk_mgr_, &log_mgr);
+    page_id_t pid;
+    auto* page = bpm_->NewPage(&pid);
+    ASSERT_NE(page, nullptr);
+    auto record = LogRecord::MakeInsert(1, INVALID_LSN, pid, 0, "wal", 3);
+    lsn_t page_lsn = log_mgr.AppendLogRecord(record);
+    page->SetLsn(page_lsn);
+    EXPECT_LT(log_mgr.GetFlushedLsn(), page_lsn);
+    bpm_->UnpinPage(pid, true);
+    bpm_->FlushPage(pid);
+    EXPECT_GE(log_mgr.GetFlushedLsn(), page_lsn);
+    std::filesystem::remove(wal_file);
 }
 
 }  // namespace sothdb

@@ -1,10 +1,13 @@
 #include "storage/buffer_pool_manager.h"
+#include "recovery/log_manager.h"
 
 namespace sothdb {
 
-BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager* disk_manager)
+BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager* disk_manager,
+                                     LogManager* log_manager)
     : pool_size_(pool_size),
       disk_manager_(disk_manager),
+      log_manager_(log_manager),
       replacer_(pool_size) {
     pages_ = new Page[pool_size];
     for (size_t i = 0; i < pool_size; ++i) {
@@ -15,6 +18,13 @@ BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager* disk_manager
 BufferPoolManager::~BufferPoolManager() {
     FlushAllPages();
     delete[] pages_;
+}
+
+void BufferPoolManager::WriteFrameToDisk(Page& page) {
+    if (log_manager_ != nullptr) {
+        log_manager_->Flush(page.GetLsn());
+    }
+    disk_manager_->WritePage(page.GetPageId(), page.GetData());
 }
 
 bool BufferPoolManager::AllocateFrame(frame_id_t* frame_id) {
@@ -28,7 +38,7 @@ bool BufferPoolManager::AllocateFrame(frame_id_t* frame_id) {
     }
     auto& victim = pages_[*frame_id];
     if (victim.IsDirty()) {
-        disk_manager_->WritePage(victim.GetPageId(), victim.GetData());
+        WriteFrameToDisk(victim);
     }
     page_table_.erase(victim.GetPageId());
     return true;
@@ -102,7 +112,7 @@ bool BufferPoolManager::FlushPage(page_id_t page_id) {
         return false;
     }
     auto& page = pages_[it->second];
-    disk_manager_->WritePage(page_id, page.GetData());
+    WriteFrameToDisk(page);
     page.SetDirty(false);
     return true;
 }
@@ -112,7 +122,7 @@ void BufferPoolManager::FlushAllPages() {
     for (auto& [pid, fid] : page_table_) {
         auto& page = pages_[fid];
         if (page.IsDirty()) {
-            disk_manager_->WritePage(pid, page.GetData());
+            WriteFrameToDisk(page);
             page.SetDirty(false);
         }
     }
