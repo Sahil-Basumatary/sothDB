@@ -17,6 +17,23 @@ BufferPoolManager::~BufferPoolManager() {
     delete[] pages_;
 }
 
+bool BufferPoolManager::AllocateFrame(frame_id_t* frame_id) {
+    if (!free_list_.empty()) {
+        *frame_id = free_list_.front();
+        free_list_.pop_front();
+        return true;
+    }
+    if (!replacer_.Victim(frame_id)) {
+        return false;
+    }
+    auto& victim = pages_[*frame_id];
+    if (victim.IsDirty()) {
+        disk_manager_->WritePage(victim.GetPageId(), victim.GetData());
+    }
+    page_table_.erase(victim.GetPageId());
+    return true;
+}
+
 Page* BufferPoolManager::FetchPage(page_id_t page_id) {
     std::scoped_lock lock(latch_);
     auto it = page_table_.find(page_id);
@@ -28,16 +45,7 @@ Page* BufferPoolManager::FetchPage(page_id_t page_id) {
         return &page;
     }
     frame_id_t victim_frame;
-    if (!free_list_.empty()) {
-        victim_frame = free_list_.front();
-        free_list_.pop_front();
-    } else if (replacer_.Victim(&victim_frame)) {
-        auto& old_page = pages_[victim_frame];
-        if (old_page.IsDirty()) {
-            disk_manager_->WritePage(old_page.GetPageId(), old_page.GetData());
-        }
-        page_table_.erase(old_page.GetPageId());
-    } else {
+    if (!AllocateFrame(&victim_frame)) {
         return nullptr;
     }
     auto& new_page = pages_[victim_frame];
@@ -52,16 +60,7 @@ Page* BufferPoolManager::FetchPage(page_id_t page_id) {
 Page* BufferPoolManager::NewPage(page_id_t* page_id) {
     std::scoped_lock lock(latch_);
     frame_id_t frame;
-    if (!free_list_.empty()) {
-        frame = free_list_.front();
-        free_list_.pop_front();
-    } else if (replacer_.Victim(&frame)) {
-        auto& old_page = pages_[frame];
-        if (old_page.IsDirty()) {
-            disk_manager_->WritePage(old_page.GetPageId(), old_page.GetData());
-        }
-        page_table_.erase(old_page.GetPageId());
-    } else {
+    if (!AllocateFrame(&frame)) {
         return nullptr;
     }
     auto new_pid = disk_manager_->AllocatePage();

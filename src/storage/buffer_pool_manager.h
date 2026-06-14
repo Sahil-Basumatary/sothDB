@@ -24,6 +24,11 @@ class BufferPoolManager {
     size_t GetPoolSize() const { return pool_size_; }
 
  private:
+    // Reserves a frame for a new page, preferring the free list and otherwise
+    // evicting an LRU victim (flushing it first when dirty). Caller must hold
+    // latch_. Returns false only when every frame is pinned.
+    bool AllocateFrame(frame_id_t* frame_id);
+
     size_t pool_size_;
     Page* pages_;
     DiskManager* disk_manager_;
