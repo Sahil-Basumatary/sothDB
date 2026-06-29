@@ -16,11 +16,14 @@ template <typename KeyType, typename ValueType, typename KeyComparator>
 class BPlusTree {
  public:
     BPlusTree(std::string name, BufferPoolManager* buffer_pool_manager,
-              KeyComparator comparator, page_id_t header_page_id = INVALID_PAGE_ID)
+              KeyComparator comparator, page_id_t header_page_id = INVALID_PAGE_ID,
+              uint16_t leaf_max_size = 0, uint16_t internal_max_size = 0)
         : name_(std::move(name)),
           buffer_pool_manager_(buffer_pool_manager),
           comparator_(std::move(comparator)),
-          header_page_id_(header_page_id) {
+          header_page_id_(header_page_id),
+          leaf_max_size_(leaf_max_size == 0 ? LeafMaxSize() : leaf_max_size),
+          internal_max_size_(internal_max_size == 0 ? InternalMaxSize() : internal_max_size) {
         if (header_page_id_ == INVALID_PAGE_ID) {
             page_id_t new_header_page_id;
             auto* header_page = buffer_pool_manager_->NewPage(&new_header_page_id);
@@ -57,6 +60,13 @@ class BPlusTree {
         buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), false);
         return found;
     }
+    bool Insert(const KeyType& key, const ValueType& value) {
+        if (IsEmpty()) {
+            StartNewTree(key, value);
+            return true;
+        }
+        return InsertIntoLeaf(key, value);
+    }
     bool IsEmpty() const {
         return root_page_id_ == INVALID_PAGE_ID;
     }
@@ -76,6 +86,38 @@ class BPlusTree {
         buffer_pool_manager_->UnpinPage(header_page_id_, true);
     }
  private:
+    static constexpr uint16_t LeafMaxSize() {
+        return static_cast<uint16_t>(
+            (PAGE_SIZE - B_PLUS_TREE_PAGE_HEADER_SIZE - sizeof(page_id_t)) /
+            (sizeof(KeyType) + sizeof(ValueType)));
+    }
+    static constexpr uint16_t InternalMaxSize() {
+        return static_cast<uint16_t>(
+            (PAGE_SIZE - B_PLUS_TREE_PAGE_HEADER_SIZE) /
+            (sizeof(KeyType) + sizeof(page_id_t)));
+    }
+    void StartNewTree(const KeyType& key, const ValueType& value) {
+        page_id_t root_page_id;
+        auto* root_page = buffer_pool_manager_->NewPage(&root_page_id);
+        if (root_page == nullptr) {
+            throw std::runtime_error("failed to allocate B+Tree root page");
+        }
+        BPlusTreeLeafPage<KeyType, ValueType, KeyComparator> leaf(root_page->GetData());
+        leaf.Init(leaf_max_size_);
+        leaf.Insert(key, value, comparator_);
+        buffer_pool_manager_->UnpinPage(root_page_id, true);
+        UpdateRootPageId(root_page_id);
+    }
+    bool InsertIntoLeaf(const KeyType& key, const ValueType& value) {
+        auto* leaf_page = FindLeafPage(key);
+        if (leaf_page == nullptr) {
+            return false;
+        }
+        BPlusTreeLeafPage<KeyType, ValueType, KeyComparator> leaf(leaf_page->GetData());
+        auto inserted = leaf.Insert(key, value, comparator_);
+        buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), inserted);
+        return inserted;
+    }
     static page_id_t ReadRootPageId(Page* header_page) {
         page_id_t root_page_id;
         std::memcpy(&root_page_id,
@@ -115,6 +157,8 @@ class BPlusTree {
     BufferPoolManager* buffer_pool_manager_;
     KeyComparator comparator_;
     page_id_t header_page_id_{INVALID_PAGE_ID};
+    uint16_t leaf_max_size_;
+    uint16_t internal_max_size_;
     page_id_t root_page_id_{INVALID_PAGE_ID};
 };
 }  // namespace sothdb
