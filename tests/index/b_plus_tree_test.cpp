@@ -102,6 +102,53 @@ TEST_F(BPlusTreeTest, TraversesInternalRootToMatchingLeaf) {
     EXPECT_FALSE(tree.GetValue(40, &result));
     EXPECT_TRUE(result.empty());
 }
+TEST_F(BPlusTreeTest, InsertIntoEmptyTreeCreatesRootLeaf) {
+    std::filesystem::remove(test_file_);
+    DiskManager disk_manager(test_file_);
+    BufferPoolManager buffer_pool_manager(8, &disk_manager);
+    BPlusTree<int64_t, RID, BPlusTreeInt64Comparator> tree(
+        "insert_root_index", &buffer_pool_manager, BPlusTreeInt64Comparator{});
+    EXPECT_TRUE(tree.IsEmpty());
+    EXPECT_TRUE(tree.Insert(42, RID(4, 2)));
+    EXPECT_FALSE(tree.IsEmpty());
+    std::vector<RID> result;
+    EXPECT_TRUE(tree.GetValue(42, &result));
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0], RID(4, 2));
+}
+TEST_F(BPlusTreeTest, InsertOutOfOrderKeepsKeysLookupable) {
+    std::filesystem::remove(test_file_);
+    DiskManager disk_manager(test_file_);
+    BufferPoolManager buffer_pool_manager(8, &disk_manager);
+    BPlusTree<int64_t, RID, BPlusTreeInt64Comparator> tree(
+        "insert_unsorted_index", &buffer_pool_manager, BPlusTreeInt64Comparator{});
+    const std::vector<int64_t> keys{30, 10, 50, 20, 40};
+    for (auto key : keys) {
+        EXPECT_TRUE(tree.Insert(key, RID(static_cast<page_id_t>(key), 1)));
+    }
+    for (auto key : keys) {
+        std::vector<RID> result;
+        EXPECT_TRUE(tree.GetValue(key, &result));
+        ASSERT_EQ(result.size(), 1);
+        EXPECT_EQ(result[0], RID(static_cast<page_id_t>(key), 1));
+    }
+    std::vector<RID> missing;
+    EXPECT_FALSE(tree.GetValue(99, &missing));
+    EXPECT_TRUE(missing.empty());
+}
+TEST_F(BPlusTreeTest, InsertDuplicateKeyIsRejected) {
+    std::filesystem::remove(test_file_);
+    DiskManager disk_manager(test_file_);
+    BufferPoolManager buffer_pool_manager(8, &disk_manager);
+    BPlusTree<int64_t, RID, BPlusTreeInt64Comparator> tree(
+        "insert_duplicate_index", &buffer_pool_manager, BPlusTreeInt64Comparator{});
+    EXPECT_TRUE(tree.Insert(15, RID(1, 5)));
+    EXPECT_FALSE(tree.Insert(15, RID(9, 9)));
+    std::vector<RID> result;
+    EXPECT_TRUE(tree.GetValue(15, &result));
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0], RID(1, 5));
+}
 TEST_F(BPlusTreeTest, ReloadsRootPageIdFromHeaderPage) {
     std::filesystem::remove(test_file_);
     page_id_t header_page_id = INVALID_PAGE_ID;
